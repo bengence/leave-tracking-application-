@@ -1,0 +1,1426 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LeaveTracker Pro</title>
+    
+    <!-- External Libraries -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;900&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <!-- ======================================================= -->
+    <!-- CSS SECTION                                             -->
+    <!-- ======================================================= -->
+    <style>
+        body { 
+            font-family: 'Inter', sans-serif; 
+            background-color: #09090b; 
+            color: #f4f4f5;
+        }
+        
+        /* Custom scrollbar for dark theme */
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #09090b; }
+        ::-webkit-scrollbar-thumb { background: #27272a; border-radius: 999px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3f3f46; }
+
+        /* Utility classes */
+        .hide-scroll::-webkit-scrollbar { display: none; }
+        .hide-scroll { -ms-overflow-style: none; scrollbar-width: none; }
+        
+        /* Toast Animations */
+        @keyframes slideIn { 
+            from { transform: translateX(100%); opacity: 0; } 
+            to { transform: translateX(0); opacity: 1; } 
+        }
+        @keyframes fadeOut { 
+            from { opacity: 1; transform: translateX(0); } 
+            to { opacity: 0; transform: translateX(20px); } 
+        }
+        .toast-enter { animation: slideIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+        .toast-exit { animation: fadeOut 0.3s ease-out forwards; }
+        
+        /* Loader Animation */
+        .loader { 
+            border: 3px solid rgba(250, 204, 21, 0.2); 
+            border-radius: 50%; 
+            border-top: 3px solid #facc15; 
+            width: 36px; 
+            height: 36px; 
+            animation: spin 1s linear infinite; 
+        }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        /* Card Hover Effects */
+        .dashboard-card { transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1); }
+        .dashboard-card:hover { transform: translateY(-3px); border-color: rgba(250, 204, 21, 0.4); box-shadow: 0 12px 24px -6px rgba(0, 0, 0, 0.6); }
+
+        /* Modern input dark override */
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(0.8) sepia(1) saturate(5) hue-rotate(5deg);
+            cursor: pointer;
+        }
+    </style>
+</head>
+<body class="text-zinc-100 h-screen flex overflow-hidden bg-zinc-950">
+
+    <!-- ======================================================= -->
+    <!-- HTML SECTION                                            -->
+    <!-- ======================================================= -->
+
+    <!-- Toast Container -->
+    <div id="toast-container" class="fixed top-4 right-4 z-[100] flex flex-col gap-3 pointer-events-none"></div>
+
+    <!-- Global Loading Overlay -->
+    <div id="global-loader" class="fixed inset-0 z-[110] flex flex-col items-center justify-center bg-zinc-950/80 backdrop-blur-md transition-opacity duration-300 hidden">
+        <div class="loader mb-4"></div>
+        <p class="text-yellow-400 font-semibold tracking-wide text-lg" id="loader-text">Loading...</p>
+    </div>
+
+    <!-- Login View -->
+    <div id="view-login" class="w-full h-full flex items-center justify-center bg-zinc-950 absolute inset-0 z-50">
+        <div class="bg-zinc-900 p-8 sm:p-10 rounded-3xl shadow-2xl shadow-black/80 w-full max-w-md border border-zinc-800 mx-4">
+            <div class="text-center mb-8">
+                <div class="bg-gradient-to-br from-yellow-400 to-amber-500 text-zinc-950 w-16 h-16 rounded-2xl flex items-center justify-center mx-auto mb-5 shadow-lg shadow-yellow-500/20 font-black">
+                    <i class="fa-solid fa-leaf text-3xl"></i>
+                </div>
+                <h1 class="text-3xl font-extrabold text-white tracking-tight">LeaveTracker</h1>
+                <p class="text-zinc-400 text-sm mt-2">Sign in to your account</p>
+            </div>
+            
+            
+
+            <form id="login-form" class="space-y-5">
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Email Address</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <i class="fa-solid fa-envelope text-zinc-500"></i>
+                        </div>
+                        <input type="email" id="login-email" required class="w-full pl-10 pr-4 py-3 border border-zinc-800 rounded-xl focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none transition bg-zinc-950 text-white placeholder-zinc-500" placeholder="you@company.com">
+                    </div>
+                </div>
+                <div>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Password</label>
+                    <div class="relative">
+                        <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+                            <i class="fa-solid fa-lock text-zinc-500"></i>
+                        </div>
+                        <input type="password" id="login-password" required class="w-full pl-10 pr-4 py-3 border border-zinc-800 rounded-xl focus:ring-2 focus:ring-yellow-400 focus:border-yellow-400 outline-none transition bg-zinc-950 text-white placeholder-zinc-500" placeholder="••••••••">
+                    </div>
+                </div>
+                <button type="submit" id="btn-login" class="w-full bg-yellow-400 hover:bg-yellow-300 text-zinc-950 font-bold py-3.5 rounded-xl transition shadow-lg shadow-yellow-500/20 mt-6 flex justify-center items-center gap-2">
+                    <span>Sign In</span>
+                    <i class="fa-solid fa-arrow-right text-sm"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Main App Layout -->
+    <div id="app-layout" class="hidden w-full h-full flex flex-col md:flex-row relative bg-zinc-950">
+        
+        <!-- Mobile Header -->
+        <div class="md:hidden bg-zinc-950 text-white p-4 flex justify-between items-center z-40 relative border-b border-zinc-800">
+            <div class="flex items-center gap-2 font-bold text-lg">
+                <i class="fa-solid fa-leaf text-yellow-400"></i> LeaveTracker
+            </div>
+            <button id="mobile-menu-btn" class="p-2 hover:bg-zinc-800 rounded-lg transition focus:outline-none text-zinc-300">
+                <i class="fa-solid fa-bars text-xl"></i>
+            </button>
+        </div>
+
+        <!-- Sidebar Navigation -->
+        <nav id="sidebar" class="bg-black text-white w-64 flex-shrink-0 absolute md:relative h-[calc(100%-60px)] md:h-full z-30 transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out flex flex-col border-r border-zinc-800/80">
+            
+            <div class="p-6 hidden md:flex items-center gap-3 border-b border-zinc-800/80">
+                <div class="bg-yellow-400 text-zinc-950 w-9 h-9 rounded-xl flex items-center justify-center font-black shadow-md shadow-yellow-500/10">
+                    <i class="fa-solid fa-leaf text-base"></i>
+                </div>
+                <span class="font-extrabold text-xl tracking-tight text-white">LeaveTracker</span>
+            </div>
+            
+            <div class="p-5 border-b border-zinc-800/80 flex items-center gap-4 bg-zinc-900/40">
+                <div class="w-11 h-11 rounded-full bg-gradient-to-br from-yellow-400 to-amber-500 flex items-center justify-center font-extrabold text-zinc-950 shadow-md text-base" id="user-initials">--</div>
+                <div class="overflow-hidden flex-1">
+                    <div id="user-name" class="font-bold text-sm truncate text-zinc-100">Loading...</div>
+                    <div id="user-role" class="text-[10px] font-bold text-yellow-400 uppercase tracking-widest mt-0.5 px-2 py-0.5 bg-yellow-400/10 border border-yellow-400/20 rounded inline-block">ROLE</div>
+                </div>
+            </div>
+
+            <div class="flex-1 overflow-y-auto py-6 space-y-1 px-3 hide-scroll" id="nav-links">
+                <!-- Dynamically populated via JS -->
+            </div>
+
+            <div class="p-4 border-t border-zinc-800/80">
+                <button onclick="handleLogout()" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 text-zinc-400 hover:text-white hover:bg-zinc-900 rounded-xl transition text-sm font-semibold border border-zinc-800">
+                    <i class="fa-solid fa-right-from-bracket"></i> Sign Out
+                </button>
+            </div>
+        </nav>
+
+        <!-- Main Content Area -->
+        <main class="flex-1 bg-zinc-950 overflow-y-auto relative p-4 md:p-8">
+            
+            <!-- Global Manager OOO Alert Banner -->
+            <div id="ooo-banner-container" class="hidden w-full max-w-7xl mx-auto mb-6">
+                <!-- Populated dynamically via JS if a manager is away -->
+            </div>
+            
+            <!-- Global Birthday Alert Banner -->
+            <div id="birthday-banner-container" class="hidden w-full max-w-7xl mx-auto mb-6">
+                <!-- Populated dynamically via JS if it's someone's birthday -->
+            </div>
+
+            <!-- 1. USER DASHBOARD VIEW -->
+            <div id="view-user-dashboard" class="view-section hidden space-y-8 max-w-7xl mx-auto">
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-end gap-4">
+                    <div>
+                        <h2 class="text-3xl font-black text-white tracking-tight">My Dashboard</h2>
+                        <p class="text-zinc-400 mt-1 text-sm">Overview of your current leave balances and recent activity.</p>
+                    </div>
+                    <button onclick="navigate('request')" class="px-5 py-2.5 bg-yellow-400 hover:bg-yellow-300 text-zinc-950 rounded-xl transition shadow-lg shadow-yellow-500/10 font-bold flex items-center gap-2 w-full sm:w-auto justify-center">
+                        <i class="fa-solid fa-plus"></i> New Request
+                    </button>
+                </div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Left Column (Main Balances & History) -->
+                    <div class="lg:col-span-2 space-y-8">
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4" id="user-balance-cards">
+                            <!-- Populated by JS -->
+                        </div>
+                        
+                        <div class="bg-zinc-900 rounded-2xl shadow-xl border border-zinc-800 overflow-hidden">
+                            <div class="p-5 border-b border-zinc-800 bg-zinc-900/80 flex justify-between items-center">
+                                <h3 class="font-bold text-white text-lg flex items-center gap-2">
+                                    <i class="fa-solid fa-clock-rotate-left text-yellow-400"></i> Recent Requests
+                                </h3>
+                                <button onclick="navigate('history')" class="text-xs font-bold text-yellow-400 hover:text-yellow-300 uppercase tracking-wider">View All</button>
+                            </div>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-sm whitespace-nowrap">
+                                    <thead class="text-zinc-400 bg-zinc-950/50 border-b border-zinc-800">
+                                        <tr>
+                                            <th class="p-4 font-semibold text-xs uppercase tracking-wider">Leave Type</th>
+                                            <th class="p-4 font-semibold text-xs uppercase tracking-wider">Date Range / Hours</th>
+                                            <th class="p-4 font-semibold text-xs uppercase tracking-wider">Status</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody id="user-recent-requests" class="divide-y divide-zinc-800/60">
+                                        <!-- Populated by JS -->
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column (Widgets) -->
+                    <div class="space-y-6">
+                        <!-- Who's Away Widget -->
+                        <div class="bg-zinc-900 rounded-2xl shadow-xl border border-zinc-800 overflow-hidden">
+                            <div class="p-5 border-b border-zinc-800 bg-zinc-900">
+                                <h3 class="font-bold text-white text-md flex items-center gap-2">
+                                    <i class="fa-solid fa-mug-hot text-amber-400"></i> Team: Who's Away Today
+                                </h3>
+                            </div>
+                            <div class="p-2" id="dashboard-whos-away">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Public Holidays Widget -->
+                        <div class="bg-zinc-900 rounded-2xl shadow-xl border border-zinc-800 overflow-hidden">
+                            <div class="p-5 border-b border-zinc-800 bg-zinc-900">
+                                <h3 class="font-bold text-white text-md flex items-center gap-2">
+                                    <i class="fa-solid fa-champagne-glasses text-yellow-400"></i> Upcoming Holidays
+                                </h3>
+                            </div>
+                            <div class="p-4 space-y-4" id="dashboard-holidays">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+
+                        <!-- Company Events Widget -->
+                        <div class="bg-zinc-900 rounded-2xl shadow-xl border border-zinc-800 overflow-hidden">
+                            <div class="p-5 border-b border-zinc-800 bg-zinc-900">
+                                <h3 class="font-bold text-white text-md flex items-center gap-2">
+                                    <i class="fa-solid fa-calendar-star text-amber-400"></i> Upcoming Events
+                                </h3>
+                            </div>
+                            <div class="p-4 space-y-4" id="dashboard-events">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 2. MANAGER DASHBOARD VIEW -->
+            <div id="view-manager-dashboard" class="view-section hidden space-y-8 max-w-7xl mx-auto">
+                <div class="flex justify-between items-end">
+                    <div>
+                        <h2 class="text-3xl font-black text-white tracking-tight">Manager Dashboard</h2>
+                        <p class="text-zinc-400 mt-1 text-sm">Review team requests and upcoming leave.</p>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+                    <!-- Approvals List -->
+                    <div class="lg:col-span-2 space-y-4">
+                        <h3 class="text-xl font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-inbox text-yellow-400"></i> Pending Approvals
+                            <span id="mgr-pending-count" class="bg-yellow-400/20 text-yellow-400 border border-yellow-400/30 text-xs px-2.5 py-0.5 rounded-full ml-2 font-black">0</span>
+                        </h3>
+                        <div id="manager-approvals-list" class="space-y-4">
+                            <!-- Populated by JS -->
+                        </div>
+                    </div>
+
+                    <!-- Team Calendar List -->
+                    <div>
+                        <div class="bg-zinc-900 rounded-2xl shadow-xl border border-zinc-800 overflow-hidden">
+                            <div class="p-5 border-b border-zinc-800 bg-zinc-900/90">
+                                <h3 class="font-bold text-white flex items-center gap-2">
+                                    <i class="fa-solid fa-calendar-check text-emerald-400"></i> Approved Team Leave
+                                </h3>
+                            </div>
+                            <div class="p-2 space-y-1" id="manager-calendar-list">
+                                <!-- Populated by JS -->
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 3. DEVELOPER DASHBOARD VIEW -->
+            <div id="view-dev-dashboard" class="view-section hidden space-y-8 max-w-6xl mx-auto">
+                <div class="flex justify-between items-end">
+                    <div>
+                        <h2 class="text-3xl font-black text-white tracking-tight">System Administration</h2>
+                        <p class="text-zinc-400 mt-1 text-sm">Manage users, adjust balances, and configure settings.</p>
+                    </div>
+                </div>
+
+                <!-- Admin Action Cards -->
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <!-- Create User Form -->
+                    <div class="bg-zinc-900 rounded-2xl shadow-xl border border-zinc-800 p-6 md:col-span-2">
+                        <div class="flex justify-between items-center mb-5">
+                            <h3 class="font-bold text-white text-lg"><i class="fa-solid fa-user-plus text-yellow-400 mr-2"></i> Register New User</h3>
+                            <span id="user-count-badge" class="bg-zinc-800 text-zinc-300 font-bold px-3 py-1 rounded-full text-xs border border-zinc-700">0 / 20 Limit</span>
+                        </div>
+                        <form id="create-user-form" class="space-y-4">
+                            <div>
+                                <input type="text" id="new-user-name" required placeholder="Full Name" class="w-full px-3.5 py-2.5 border border-zinc-800 rounded-xl text-sm focus:ring-2 focus:ring-yellow-400 outline-none bg-zinc-950 text-white placeholder-zinc-500">
+                            </div>
+                            <div class="grid grid-cols-2 gap-4">
+                                <input type="email" id="new-user-email" required placeholder="Email Address" class="w-full px-3.5 py-2.5 border border-zinc-800 rounded-xl text-sm focus:ring-2 focus:ring-yellow-400 outline-none bg-zinc-950 text-white placeholder-zinc-500">
+                                <select id="new-user-role" class="w-full px-3.5 py-2.5 border border-zinc-800 rounded-xl text-sm focus:ring-2 focus:ring-yellow-400 outline-none bg-zinc-950 text-white cursor-pointer">
+                                    <option value="user">Regular User</option>
+                                    <option value="manager">Manager</option>
+                                </select>
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-1">Date of Birth</label>
+                                <input type="date" id="new-user-dob" required class="w-full px-3.5 py-2.5 border border-zinc-800 rounded-xl text-sm focus:ring-2 focus:ring-yellow-400 outline-none bg-zinc-950 text-white">
+                            </div>
+                            <button type="submit" id="btn-create-user" class="w-full bg-yellow-400 hover:bg-yellow-300 text-zinc-950 font-bold py-3 rounded-xl transition text-sm shadow-md">
+                                Create Account
+                            </button>
+                        </form>
+                    </div>
+
+                    <!-- System Jobs -->
+                    <div class="bg-zinc-900 rounded-2xl shadow-xl border border-zinc-800 p-6 flex flex-col justify-between">
+                        <div>
+                            <h3 class="font-bold text-white text-lg mb-4"><i class="fa-solid fa-microchip text-yellow-400 mr-2"></i> System Jobs</h3>
+                            
+                            <div class="bg-zinc-950 border border-zinc-800 rounded-xl p-4 mb-4">
+                                <h4 class="font-bold text-yellow-400 text-sm mb-1">Manual Accrual</h4>
+                                <p class="text-xs text-zinc-400 mb-3 leading-relaxed">Simulates the cron job that runs on the 1st. Adds 1.25 annual leave days to all active users.</p>
+                            </div>
+                        </div>
+                        <button onclick="runMonthlyAccrual()" class="bg-zinc-800 hover:bg-zinc-700 text-yellow-400 border border-yellow-400/30 font-bold py-2.5 px-4 rounded-xl transition w-full text-sm flex items-center justify-center gap-2">
+                            <i class="fa-solid fa-play"></i> Run Accrual Script
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <!-- Adjust User Balances Form -->
+                    <div class="bg-zinc-900 rounded-2xl shadow-xl border border-zinc-800 p-6">
+                        <h3 class="font-bold text-white text-lg mb-1"><i class="fa-solid fa-scale-balanced text-yellow-400 mr-2"></i> Adjust Employee Balances</h3>
+                        <p class="text-xs text-zinc-400 mb-5">Manually add or subtract days/hours from specific employees.</p>
+                        
+                        <form id="adjust-balance-form" class="flex flex-col gap-4">
+                            <select id="adj-user" required class="w-full px-3.5 py-2.5 border border-zinc-800 rounded-xl text-sm focus:ring-2 focus:ring-yellow-400 outline-none bg-zinc-950 text-white cursor-pointer">
+                                <!-- Populated by JS -->
+                            </select>
+                            <div class="flex gap-4">
+                                <select id="adj-type" required class="w-full px-3.5 py-2.5 border border-zinc-800 rounded-xl text-sm focus:ring-2 focus:ring-yellow-400 outline-none bg-zinc-950 text-white cursor-pointer">
+                                    <option value="annual">Annual</option>
+                                    <option value="sick">Sick (Days)</option>
+                                    <option value="family">Family (Days)</option>
+                                    <option value="timeoff">Time Off (Hours)</option>
+                                </select>
+                                <input type="number" step="0.25" id="adj-amount" required placeholder="Amt (+ or -)" class="w-full px-3.5 py-2.5 border border-zinc-800 rounded-xl text-sm focus:ring-2 focus:ring-yellow-400 outline-none bg-zinc-950 text-white placeholder-zinc-500">
+                            </div>
+                            <button type="submit" class="w-full bg-yellow-400 hover:bg-yellow-300 text-zinc-950 font-bold py-2.5 px-5 rounded-xl transition text-sm shadow-md">
+                                Apply Change
+                            </button>
+                        </form>
+                    </div>
+                    
+                    <!-- Add Company Event Form -->
+                    <div class="bg-zinc-900 rounded-2xl shadow-xl border border-zinc-800 p-6">
+                        <h3 class="font-bold text-white text-lg mb-1"><i class="fa-solid fa-calendar-plus text-amber-400 mr-2"></i> Schedule Event</h3>
+                        <p class="text-xs text-zinc-400 mb-5">Add a new company event to appear on everyone's dashboard.</p>
+                        
+                        <form id="create-event-form" class="flex flex-col gap-4">
+                            <input type="text" id="new-event-title" required placeholder="Event Title (e.g. End of Year Party)" class="w-full px-3.5 py-2.5 border border-zinc-800 rounded-xl text-sm focus:ring-2 focus:ring-yellow-400 outline-none bg-zinc-950 text-white placeholder-zinc-500">
+                            <input type="date" id="new-event-date" required class="w-full px-3.5 py-2.5 border border-zinc-800 rounded-xl text-sm focus:ring-2 focus:ring-yellow-400 outline-none bg-zinc-950 text-white">
+                            <button type="submit" class="w-full bg-amber-400 hover:bg-amber-300 text-zinc-950 font-bold py-2.5 px-5 rounded-xl transition text-sm shadow-md">
+                                Create Event
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                
+                <!-- Active Directory Table -->
+                <div class="bg-zinc-900 rounded-2xl shadow-xl border border-zinc-800 overflow-hidden">
+                    <div class="p-5 border-b border-zinc-800">
+                        <h3 class="font-bold text-white text-lg">Active Directory</h3>
+                    </div>
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm whitespace-nowrap">
+                            <thead class="bg-zinc-950 text-zinc-400 border-b border-zinc-800">
+                                <tr>
+                                    <th class="px-6 py-4 font-semibold text-xs uppercase tracking-wider">Employee</th>
+                                    <th class="px-6 py-4 font-semibold text-xs uppercase tracking-wider">System Role</th>
+                                    <th class="px-6 py-4 font-semibold text-xs uppercase tracking-wider">Account Status</th>
+                                    <th class="px-6 py-4 font-semibold text-xs uppercase tracking-wider">Joined</th>
+                                </tr>
+                            </thead>
+                            <tbody id="admin-users-table" class="divide-y divide-zinc-800/60">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 4. REQUEST LEAVE VIEW -->
+            <div id="view-request" class="view-section hidden space-y-6 max-w-2xl mx-auto py-4">
+                <div class="text-center mb-8">
+                    <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 mb-4">
+                        <i class="fa-solid fa-paper-plane text-2xl"></i>
+                    </div>
+                    <h2 class="text-3xl font-black text-white tracking-tight">Request Time Off</h2>
+                    <p class="text-zinc-400 mt-2 text-sm" id="req-subtitle">Fill out the form below to submit a new leave request.</p>
+                </div>
+                
+                <div class="bg-zinc-900 rounded-3xl shadow-2xl border border-zinc-800 p-6 sm:p-8">
+                    
+                    <!-- Developer logging leave on behalf of a user -->
+                    <div id="dev-user-select-group" class="hidden mb-6 p-4 bg-zinc-950 rounded-2xl border border-yellow-400/30">
+                        <label class="block text-xs font-bold text-yellow-400 uppercase tracking-wider mb-2"><i class="fa-solid fa-user-pen mr-2"></i>Log Leave On Behalf Of:</label>
+                        <select id="req-dev-user" class="w-full px-4 py-3 border border-zinc-800 rounded-xl focus:ring-2 focus:ring-yellow-400 outline-none transition bg-zinc-900 font-medium text-white cursor-pointer">
+                            <!-- Populated by JS -->
+                        </select>
+                        <p class="text-[11px] text-zinc-400 mt-2 italic">* Leave submitted by a developer is automatically approved and instantly deducted.</p>
+                    </div>
+
+                    <form id="request-form" class="space-y-6">
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Type of Leave</label>
+                            <div class="relative">
+                                <select id="req-type" required class="w-full pl-4 pr-10 py-3.5 appearance-none border border-zinc-800 rounded-xl focus:ring-2 focus:ring-yellow-400 outline-none transition bg-zinc-950 text-white cursor-pointer">
+                                    <option value="annual">Annual Leave</option>
+                                    <option value="sick">Sick Leave</option>
+                                    <option value="family">Family Responsibility</option>
+                                    <option value="timeoff">Time Off (Hourly)</option>
+                                </select>
+                                <div class="absolute inset-y-0 right-0 flex items-center px-4 pointer-events-none text-zinc-500">
+                                    <i class="fa-solid fa-chevron-down text-sm"></i>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 bg-zinc-950 p-4 rounded-2xl border border-zinc-800">
+                            <div>
+                                <label class="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Start Date</label>
+                                <input type="date" id="req-start" required class="w-full px-4 py-2.5 border border-zinc-800 rounded-xl focus:ring-2 focus:ring-yellow-400 outline-none transition bg-zinc-900 text-white">
+                            </div>
+                            
+                            <div id="end-date-group">
+                                <label class="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">End Date (Inclusive)</label>
+                                <input type="date" id="req-end" required class="w-full px-4 py-2.5 border border-zinc-800 rounded-xl focus:ring-2 focus:ring-yellow-400 outline-none transition bg-zinc-900 text-white">
+                            </div>
+                            
+                            <div id="hours-group" class="hidden">
+                                <label class="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Duration (Hours)</label>
+                                <select id="req-hours" class="w-full px-4 py-2.5 border border-zinc-800 rounded-xl focus:ring-2 focus:ring-yellow-400 outline-none transition bg-zinc-900 text-white cursor-pointer">
+                                    <option value="2">2 Hours</option>
+                                    <option value="4">4 Hours (Half Day)</option>
+                                    <option value="6">6 Hours (3/4 Day)</option>
+                                </select>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Reason / Comments</label>
+                            <textarea id="req-reason" required rows="3" placeholder="Please provide brief details..." class="w-full px-4 py-3 border border-zinc-800 rounded-xl focus:ring-2 focus:ring-yellow-400 outline-none transition resize-none bg-zinc-950 text-white placeholder-zinc-500"></textarea>
+                        </div>
+                        
+                        <div class="pt-4 border-t border-zinc-800 flex gap-3">
+                            <button type="button" onclick="navigate('dashboard')" class="flex-1 px-4 py-3 bg-zinc-800 border border-zinc-700 text-zinc-300 rounded-xl hover:bg-zinc-700 transition font-bold">Cancel</button>
+                            <button type="submit" class="flex-1 px-4 py-3 bg-yellow-400 text-zinc-950 rounded-xl hover:bg-yellow-300 transition shadow-lg font-bold">Submit Request</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+
+            <!-- 5. HISTORY VIEW -->
+            <div id="view-history" class="view-section hidden space-y-6 max-w-6xl mx-auto">
+                <div class="flex items-center gap-3 mb-2">
+                    <div class="w-10 h-10 rounded-2xl bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 flex items-center justify-center">
+                        <i class="fa-solid fa-clock-rotate-left"></i>
+                    </div>
+                    <h2 class="text-3xl font-black text-white tracking-tight">Leave History</h2>
+                </div>
+                
+                <div class="bg-zinc-900 rounded-2xl shadow-xl border border-zinc-800 overflow-hidden">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left text-sm whitespace-nowrap">
+                            <thead class="bg-zinc-950 text-zinc-400 border-b border-zinc-800">
+                                <tr>
+                                    <th class="px-6 py-4 font-semibold text-xs uppercase tracking-wider">Leave Type</th>
+                                    <th class="px-6 py-4 font-semibold text-xs uppercase tracking-wider">Date Requested</th>
+                                    <th class="px-6 py-4 font-semibold text-xs uppercase tracking-wider">Duration</th>
+                                    <th class="px-6 py-4 font-semibold text-xs uppercase tracking-wider">Status</th>
+                                    <th class="px-6 py-4 font-semibold text-xs uppercase tracking-wider text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-table-body" class="divide-y divide-zinc-800/60">
+                                <!-- Populated by JS -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <!-- Manager Action Modal -->
+    <div id="modal-manager" class="fixed inset-0 z-[60] flex items-center justify-center bg-black/75 hidden backdrop-blur-sm transition-opacity">
+        <div class="bg-zinc-900 p-6 sm:p-8 rounded-3xl shadow-2xl border border-zinc-800 w-full max-w-md mx-4 transform transition-transform scale-95" id="mgr-modal-content">
+            <div class="flex justify-between items-start mb-5">
+                <h3 class="text-xl font-bold text-white" id="mgr-modal-title">Review Request</h3>
+                <button onclick="closeModal('modal-manager')" class="text-zinc-500 hover:text-zinc-300 focus:outline-none">
+                    <i class="fa-solid fa-xmark text-xl"></i>
+                </button>
+            </div>
+            
+            <div class="bg-zinc-950 p-4 rounded-2xl border border-zinc-800 mb-6">
+                <div class="text-sm text-zinc-300" id="mgr-modal-desc">
+                    <!-- Populated by JS -->
+                </div>
+            </div>
+            
+            <div class="flex flex-col sm:flex-row justify-end gap-3 mt-2">
+                <button onclick="closeModal('modal-manager')" class="px-5 py-2.5 border border-zinc-800 text-zinc-300 rounded-xl hover:bg-zinc-800 font-bold transition w-full sm:w-auto">Cancel</button>
+                <button id="btn-decline" class="px-5 py-2.5 bg-rose-500/10 text-rose-400 border border-rose-500/20 rounded-xl hover:bg-rose-500/20 font-bold transition flex items-center justify-center gap-2 w-full sm:w-auto">
+                    <i class="fa-solid fa-xmark"></i> Decline
+                </button>
+                <button id="btn-approve" class="px-5 py-2.5 bg-yellow-400 text-zinc-950 rounded-xl hover:bg-yellow-300 font-bold transition flex items-center justify-center gap-2 w-full sm:w-auto shadow-md">
+                    <i class="fa-solid fa-check"></i> Approve
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- ======================================================= -->
+    <!-- JAVASCRIPT SECTION                                      -->
+    <!-- ======================================================= -->
+    <script>
+        /**
+         * 1. SUPABASE CONNECTION & DATA CACHE
+         */
+        const SUPABASE_URL = 'https://otbjeooouzzvygfeplsp.supabase.co';
+        const SUPABASE_KEY = 'sb_publishable_89Etw1SQQ3rG5V_tQ84Gaw_I8QieetM'; // public (publishable) key - safe to ship; data is protected by Row Level Security
+        const sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY, { auth: { persistSession: true, autoRefreshToken: true } });
+
+        // In-memory cache of what the signed-in user is allowed to see (filled from Supabase)
+        const MOCK_DB = {
+            settings: { maxUsers: 20, annualAccrualRate: 1.25, holidays: [], events: [] },
+            users: [],
+            requests: [],
+            audit_logs: []
+        };
+
+        const esc = (s) => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+        async function loadAll() {
+            const [prof, reqs, hol, ev, set] = await Promise.all([
+                sb.from('profiles').select('*').order('created_at'),
+                sb.from('leave_requests').select('*').order('created_at', { ascending: false }),
+                sb.from('holidays').select('*').order('date'),
+                sb.from('events').select('*').order('date'),
+                sb.from('settings').select('*').eq('id', true).maybeSingle()
+            ]);
+            const failed = [prof, reqs, hol, ev, set].find(r => r.error);
+            if (failed) throw new Error(failed.error.message);
+
+            MOCK_DB.users = prof.data.map(p => ({
+                id: p.id, email: p.email, name: p.name, role: p.role, status: p.status,
+                joined: p.joined, dob: p.dob,
+                balances: { annual: Number(p.annual), sick: Number(p.sick), family: Number(p.family), timeoff: Number(p.timeoff) }
+            }));
+            MOCK_DB.requests = reqs.data.map(r => ({
+                id: r.id, user_id: r.user_id, type: r.type, start: r.start_date, end: r.end_date,
+                duration: Number(r.duration), status: r.status, reason: r.reason, created: r.created_at
+            }));
+            MOCK_DB.settings.holidays = hol.data.map(h => ({ date: h.date, name: h.name }));
+            MOCK_DB.settings.events = ev.data.map(e => ({ id: e.id, date: e.date, title: e.title }));
+            if (set.data) {
+                MOCK_DB.settings.maxUsers = set.data.max_users;
+                MOCK_DB.settings.annualAccrualRate = Number(set.data.annual_accrual_rate);
+            }
+            if (currentUser) currentUser = MOCK_DB.users.find(u => u.id === currentUser.id) || currentUser;
+        }
+
+        async function refreshAndRender() {
+            await loadAll();
+            if (currentUser) navigate(currentView);
+        }
+
+        // Run a Supabase call with loader + error toast. Returns true on success.
+        async function guarded(label, fn) {
+            showLoader(label);
+            try { await fn(); return true; }
+            catch (err) { showToast(esc(err.message || String(err)), 'error'); return false; }
+            finally { hideLoader(); }
+        }
+
+        let currentView = 'dashboard';
+
+        const LEAVE_TYPES = {
+            annual: 'Annual Leave',
+            sick: 'Sick Leave',
+            family: 'Family Resp.',
+            timeoff: 'Time Off'
+        };
+
+        let currentUser = null;
+        let selectedRequestForReview = null;
+
+        /**
+         * 2. UTILITY FUNCTIONS
+         */
+        function showLoader(text = 'Loading...') {
+            document.getElementById('loader-text').textContent = text;
+            document.getElementById('global-loader').classList.remove('hidden');
+        }
+
+        function hideLoader() {
+            document.getElementById('global-loader').classList.add('hidden');
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const toast = document.createElement('div');
+            const styles = { 
+                success: { bg: 'bg-zinc-900 border-yellow-400/40 text-zinc-100', icon: 'fa-circle-check text-yellow-400' }, 
+                error: { bg: 'bg-zinc-900 border-rose-500/40 text-zinc-100', icon: 'fa-circle-exclamation text-rose-400' }, 
+                info: { bg: 'bg-zinc-900 border-amber-400/40 text-zinc-100', icon: 'fa-circle-info text-amber-400' }, 
+                warning: { bg: 'bg-zinc-900 border-amber-400/40 text-zinc-100', icon: 'fa-triangle-exclamation text-amber-400' } 
+            };
+            
+            toast.className = `toast-enter flex items-start gap-3 px-4 py-3.5 rounded-2xl shadow-2xl border ${styles[type].bg} min-w-[280px] max-w-sm pointer-events-auto backdrop-blur-md`;
+            toast.innerHTML = `
+                <i class="fa-solid ${styles[type].icon} mt-0.5 text-lg"></i>
+                <div class="flex-1">
+                    <p class="text-xs font-bold uppercase tracking-wider text-zinc-400">${type}</p>
+                    <p class="text-sm font-medium mt-0.5">${message}</p>
+                </div>
+            `;
+            container.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.replace('toast-enter', 'toast-exit');
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+
+        function getStatusBadge(status) {
+            const badges = {
+                'Pending': '<span class="bg-amber-400/10 text-amber-400 border border-amber-400/20 text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md font-bold flex items-center gap-1.5 w-fit"><i class="fa-solid fa-hourglass-half"></i> Pending</span>',
+                'Approved': '<span class="bg-emerald-400/10 text-emerald-400 border border-emerald-400/20 text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md font-bold flex items-center gap-1.5 w-fit"><i class="fa-solid fa-check"></i> Approved</span>',
+                'Declined': '<span class="bg-rose-400/10 text-rose-400 border border-rose-400/20 text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md font-bold flex items-center gap-1.5 w-fit"><i class="fa-solid fa-xmark"></i> Declined</span>',
+                'Cancelled': '<span class="bg-zinc-800 text-zinc-400 border border-zinc-700 text-[10px] uppercase tracking-wider px-2.5 py-1 rounded-md font-bold flex items-center gap-1.5 w-fit"><i class="fa-solid fa-ban"></i> Cancelled</span>'
+            };
+            return badges[status] || badges['Pending'];
+        }
+
+        function getInitials(name) {
+            return name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
+        }
+
+        function formatDate(dateString) {
+            if (!dateString) return '';
+            const options = { year: 'numeric', month: 'short', day: 'numeric' };
+            // By appending T00:00:00 we prevent timezone shifts altering the local date display
+            return new Date(dateString.includes('T') ? dateString : dateString + 'T00:00:00').toLocaleDateString('en-US', options);
+        }
+
+        function calculateWorkingDays(startDateStr, endDateStr) {
+            let start = new Date(startDateStr + 'T00:00:00');
+            let end = new Date(endDateStr + 'T00:00:00');
+            let count = 0;
+            let curDate = new Date(start);
+            const holidayDates = MOCK_DB.settings.holidays.map(h => h.date);
+
+            while (curDate <= end) {
+                const dayOfWeek = curDate.getDay();
+                // Construct strictly formatted YYYY-MM-DD
+                const dateStr = curDate.getFullYear() + '-' + String(curDate.getMonth() + 1).padStart(2, '0') + '-' + String(curDate.getDate()).padStart(2, '0');
+
+                if (dayOfWeek !== 0 && dayOfWeek !== 6 && !holidayDates.includes(dateStr)) {
+                    count++;
+                }
+                curDate.setDate(curDate.getDate() + 1);
+            }
+            return count;
+        }
+
+        function openModal(id) {
+            const modal = document.getElementById(id);
+            if(modal) {
+                modal.classList.remove('hidden');
+                setTimeout(() => modal.querySelector('div').classList.remove('scale-95'), 10);
+            }
+        }
+
+        function closeModal(id) {
+            const modal = document.getElementById(id);
+            if(modal) {
+                modal.querySelector('div').classList.add('scale-95');
+                setTimeout(() => modal.classList.add('hidden'), 200);
+            }
+        }
+
+        /**
+         * 3. AUTHENTICATION (LOGIN / LOGOUT)
+         */
+        document.getElementById('login-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const email = document.getElementById('login-email').value.trim();
+            const password = document.getElementById('login-password').value;
+            showLoader('Authenticating...');
+            const { data, error } = await sb.auth.signInWithPassword({ email, password });
+            if (error) { hideLoader(); showToast('Invalid email or password.', 'error'); return; }
+            await startSession(data.user, true);
+            hideLoader();
+        });
+
+        async function startSession(authUser, welcome) {
+            try {
+                currentUser = { id: authUser.id };
+                await loadAll();
+            } catch (err) {
+                currentUser = null;
+                showToast(esc(err.message), 'error');
+                return;
+            }
+            const user = MOCK_DB.users.find(u => u.id === authUser.id);
+            if (!user || user.status !== 'active') {
+                currentUser = null;
+                await sb.auth.signOut();
+                showToast('Account is inactive or not set up. Contact a developer.', 'error');
+                return;
+            }
+            currentUser = user;
+            document.getElementById('user-name').textContent = user.name;
+            document.getElementById('user-role').textContent = user.role;
+            document.getElementById('user-initials').textContent = getInitials(user.name);
+            buildNavigation();
+            document.getElementById('view-login').classList.add('hidden');
+            document.getElementById('app-layout').classList.remove('hidden');
+            navigate('dashboard');
+            if (welcome) showToast(`Welcome back, ${esc(user.name.split(' ')[0])}!`, 'success');
+        }
+
+        async function handleLogout() {
+            await sb.auth.signOut();
+            currentUser = null;
+            MOCK_DB.users = []; MOCK_DB.requests = [];
+            document.getElementById('app-layout').classList.add('hidden');
+            document.getElementById('view-login').classList.remove('hidden');
+            document.getElementById('login-form').reset();
+            showToast('You have been signed out.', 'info');
+        }
+
+        // Restore an existing session on startup
+        (async () => {
+            const { data } = await sb.auth.getSession();
+            if (data.session) { showLoader('Restoring session...'); await startSession(data.session.user, false); hideLoader(); }
+        })();
+
+        // Keep data fresh (other people's approvals, new requests...)
+        setInterval(async () => {
+            if (!currentUser || document.hidden) return;
+            if (!['dashboard', 'history'].includes(currentView)) return;
+            try { await loadAll(); navigate(currentView); } catch (e) { /* ignore transient errors */ }
+        }, 60000);
+
+        document.getElementById('mobile-menu-btn').addEventListener('click', () => {
+            document.getElementById('sidebar').classList.toggle('-translate-x-full');
+        });
+
+        /**
+         * 4. BANNERS & NAVIGATION
+         */
+        function renderOOOBanner() {
+            const today = new Date().toLocaleDateString('en-CA'); 
+            const absentManagers = new Set();
+            
+            MOCK_DB.requests.forEach(r => {
+                if (r.status === 'Approved') {
+                    let isAbsent = false;
+                    if (r.type === 'timeoff') {
+                        if (r.start === today) isAbsent = true;
+                    } else {
+                        if (r.start <= today && (r.end >= today || !r.end)) isAbsent = true;
+                    }
+                    
+                    if (isAbsent) {
+                        const u = MOCK_DB.users.find(usr => usr.id === r.user_id);
+                        if (u && u.role === 'manager') absentManagers.add(u.name);
+                    }
+                }
+            });
+
+            const container = document.getElementById('ooo-banner-container');
+            if (absentManagers.size > 0) {
+                const mgrList = Array.from(absentManagers).join(', ');
+                container.innerHTML = `
+                    <div class="bg-zinc-900 border-l-4 border-amber-400 p-4 rounded-r-2xl flex items-center gap-4 shadow-xl border-y border-r border-zinc-800 w-full">
+                        <div class="bg-amber-400/10 text-amber-400 border border-amber-400/20 p-2.5 rounded-2xl flex items-center justify-center h-11 w-11 shrink-0"><i class="fa-solid fa-plane-departure text-lg"></i></div>
+                        <div>
+                            <h4 class="text-amber-400 font-bold text-sm">Manager Out of Office</h4>
+                            <p class="text-zinc-300 text-sm mt-0.5 leading-tight">Please note that <strong class="text-white">${esc(mgrList)}</strong> ${absentManagers.size > 1 ? 'are' : 'is'} currently out of the office on approved leave.</p>
+                        </div>
+                    </div>
+                `;
+                container.classList.remove('hidden');
+            } else {
+                container.classList.add('hidden');
+                container.innerHTML = '';
+            }
+        }
+
+        function renderBirthdayBanner() {
+            const today = new Date();
+            const currentMonth = today.getMonth() + 1; // 1-12
+            const currentDay = today.getDate();
+            
+            const birthdayUsers = MOCK_DB.users.filter(u => {
+                if (!u.dob) return false;
+                const parts = u.dob.split('-');
+                if (parts.length !== 3) return false;
+                
+                const dobMonth = parseInt(parts[1], 10);
+                const dobDay = parseInt(parts[2], 10);
+                
+                return dobMonth === currentMonth && dobDay === currentDay;
+            });
+
+            const container = document.getElementById('birthday-banner-container');
+            if (birthdayUsers.length > 0) {
+                const names = birthdayUsers.map(u => u.name).join(' & ');
+                container.innerHTML = `
+                    <div class="bg-zinc-900 border-l-4 border-yellow-400 p-4 rounded-r-2xl flex items-center gap-4 shadow-xl border-y border-r border-zinc-800 w-full">
+                        <div class="bg-yellow-400/10 text-yellow-400 border border-yellow-400/20 p-2.5 rounded-2xl flex items-center justify-center h-11 w-11 shrink-0">
+                            <i class="fa-solid fa-cake-candles text-lg"></i>
+                        </div>
+                        <div>
+                            <h4 class="text-yellow-400 font-bold text-sm">Happy Birthday! 🎉</h4>
+                            <p class="text-zinc-300 text-sm mt-0.5 leading-tight">Wish a happy birthday to <strong class="text-white">${esc(names)}</strong> today!</p>
+                        </div>
+                    </div>
+                `;
+                container.classList.remove('hidden');
+            } else {
+                container.classList.add('hidden');
+                container.innerHTML = '';
+            }
+        }
+
+        function buildNavigation() {
+            const role = currentUser.role; 
+            const navContainer = document.getElementById('nav-links');
+            navContainer.innerHTML = '';
+
+            const links = [
+                { id: 'dashboard', icon: 'fa-solid fa-table-cells-large', text: 'Dashboard', roles: ['user', 'manager', 'developer'] },
+                { id: 'request', icon: 'fa-solid fa-paper-plane', text: 'Request Leave', roles: ['user', 'manager', 'developer'] },
+                { id: 'history', icon: 'fa-solid fa-clock-rotate-left', text: 'My History', roles: ['user', 'manager'] }
+            ];
+
+            links.forEach(link => {
+                if (link.roles.includes(role)) {
+                    const a = document.createElement('a');
+                    a.href = '#';
+                    a.className = `nav-link flex items-center gap-3 px-4 py-3 text-sm font-semibold rounded-xl transition mb-1 text-zinc-400 hover:text-white hover:bg-zinc-900`;
+                    a.dataset.view = link.id;
+                    a.innerHTML = `<div class="w-6 flex justify-center"><i class="${link.icon} text-base"></i></div> <span>${link.text}</span>`;
+                    a.onclick = async (e) => { e.preventDefault(); navigate(link.id); try { await loadAll(); navigate(link.id); } catch (err) { showToast(esc(err.message), 'error'); } };
+                    navContainer.appendChild(a);
+                }
+            });
+        }
+
+        function navigate(baseViewId) {
+            currentView = baseViewId;
+            let targetViewId = baseViewId;
+            if (baseViewId === 'dashboard') {
+                if (currentUser.role === 'user') targetViewId = 'user-dashboard';
+                else if (currentUser.role === 'manager') targetViewId = 'manager-dashboard';
+                else if (currentUser.role === 'developer') targetViewId = 'dev-dashboard';
+            }
+
+            renderOOOBanner();
+            renderBirthdayBanner();
+
+            if (baseViewId === 'request') {
+                if (currentUser.role === 'developer') {
+                    document.getElementById('dev-user-select-group').classList.remove('hidden');
+                    document.getElementById('req-subtitle').textContent = 'Submit an approved leave record on behalf of an employee.';
+                    document.getElementById('req-dev-user').innerHTML = MOCK_DB.users.map(u => `<option value="${u.id}">${esc(u.name)} (${esc(u.email)})</option>`).join('');
+                } else {
+                    document.getElementById('dev-user-select-group').classList.add('hidden');
+                    document.getElementById('req-subtitle').textContent = 'Fill out the form below to submit a new leave request.';
+                }
+            }
+
+            // Hide all views
+            ['user-dashboard', 'manager-dashboard', 'dev-dashboard', 'request', 'history'].forEach(v => {
+                const viewEl = document.getElementById(`view-${v}`);
+                if (viewEl) viewEl.classList.add('hidden');
+            });
+            
+            // Show target
+            const targetEl = document.getElementById(`view-${targetViewId}`);
+            if (targetEl) targetEl.classList.remove('hidden');
+
+            // Update Navigation active state
+            document.querySelectorAll('.nav-link').forEach(link => {
+                if (link.dataset.view === baseViewId) {
+                    link.classList.add('bg-yellow-400', 'text-zinc-950', 'font-bold', 'shadow-lg', 'shadow-yellow-500/10'); 
+                    link.classList.remove('text-zinc-400', 'hover:bg-zinc-900');
+                } else {
+                    link.classList.remove('bg-yellow-400', 'text-zinc-950', 'font-bold', 'shadow-lg', 'shadow-yellow-500/10'); 
+                    link.classList.add('text-zinc-400', 'hover:bg-zinc-900');
+                }
+            });
+
+            if(window.innerWidth < 768) {
+                document.getElementById('sidebar').classList.add('-translate-x-full');
+            }
+
+            // Trigger specific render logic
+            if(targetViewId === 'user-dashboard') renderUserDashboard();
+            if(targetViewId === 'manager-dashboard') renderManagerDashboard();
+            if(targetViewId === 'dev-dashboard') renderDevDashboard();
+            if(targetViewId === 'history') renderHistory();
+        }
+
+        /**
+         * 5. VIEW RENDERERS
+         */
+        function renderUserDashboard() {
+            const b = currentUser.balances;
+            const max = { annual: 15, sick: 30, family: 3, timeoff: 24 };
+
+            const cards = [
+                { title: 'Annual Leave', val: b.annual, max: max.annual, unit: 'Days', icon: 'fa-sun', color: 'text-yellow-400', bg: 'bg-yellow-400/10', bar: 'bg-yellow-400' },
+                { title: 'Sick Leave', val: b.sick, max: max.sick, unit: 'Days', icon: 'fa-thermometer-half', color: 'text-amber-400', bg: 'bg-amber-400/10', bar: 'bg-amber-400' },
+                { title: 'Family Leave', val: b.family, max: max.family, unit: 'Days', icon: 'fa-house-chimney-medical', color: 'text-yellow-400', bg: 'bg-yellow-400/10', bar: 'bg-yellow-400' },
+                { title: 'Time Off', val: b.timeoff, max: max.timeoff, unit: 'Hours', icon: 'fa-clock', color: 'text-emerald-400', bg: 'bg-emerald-400/10', bar: 'bg-emerald-400' }
+            ];
+
+            document.getElementById('user-balance-cards').innerHTML = cards.map(c => {
+                const pct = Math.min(100, Math.max(0, (c.val / c.max) * 100));
+                return `
+                <div class="dashboard-card bg-zinc-900 rounded-2xl shadow-xl border border-zinc-800 p-5 flex flex-col justify-between h-full cursor-default">
+                    <div class="flex items-start justify-between mb-3">
+                        <div class="text-xs font-bold uppercase tracking-wider text-zinc-400">${c.title}</div>
+                        <div class="w-10 h-10 rounded-xl ${c.bg} ${c.color} border border-zinc-800 flex items-center justify-center text-lg"><i class="fa-solid ${c.icon}"></i></div>
+                    </div>
+                    <div>
+                        <div class="flex items-baseline gap-1.5 mb-2">
+                            <span class="text-3xl font-black text-white">${c.val}</span>
+                            <span class="text-xs font-semibold text-zinc-500">/ ${c.max} ${c.unit}</span>
+                        </div>
+                        <div class="w-full bg-zinc-950 rounded-full h-2 mt-2 overflow-hidden border border-zinc-800">
+                            <div class="${c.bar} h-2 rounded-full transition-all duration-1000 ease-out" style="width: ${pct}%"></div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+
+            const myReqs = MOCK_DB.requests.filter(r => r.user_id === currentUser.id).sort((a,b) => new Date(b.created) - new Date(a.created)).slice(0, 4);
+            const reqTbody = document.getElementById('user-recent-requests');
+            
+            if (myReqs.length === 0) {
+                reqTbody.innerHTML = '<tr><td colspan="3" class="py-8 text-zinc-500 text-center italic">No recent leave activity found.</td></tr>';
+            } else {
+                reqTbody.innerHTML = myReqs.map(r => {
+                    const isHourly = r.type === 'timeoff';
+                    const dateDisplay = isHourly 
+                        ? `<span class="font-semibold text-zinc-200">${formatDate(r.start)}</span> <span class="text-zinc-500 ml-1">(${r.duration} hrs)</span>` 
+                        : `<span class="font-semibold text-zinc-200">${formatDate(r.start)}</span> <span class="text-zinc-500 mx-1">to</span> <span class="font-semibold text-zinc-200">${formatDate(r.end)}</span>`;
+                    return `
+                    <tr class="hover:bg-zinc-800/40 transition">
+                        <td class="p-4 font-bold text-zinc-200">${LEAVE_TYPES[r.type]}</td>
+                        <td class="p-4">${dateDisplay}</td>
+                        <td class="p-4">${getStatusBadge(r.status)}</td>
+                    </tr>`
+                }).join('');
+            }
+
+            const today = new Date().toLocaleDateString('en-CA');
+            const awayToday = MOCK_DB.requests.filter(r => 
+                r.status === 'Approved' && 
+                r.start <= today && 
+                (r.end >= today || (r.type === 'timeoff' && r.start === today))
+            );
+
+            const whosAwayContainer = document.getElementById('dashboard-whos-away');
+            if (awayToday.length === 0) {
+                whosAwayContainer.innerHTML = '<div class="p-6 text-center text-xs text-zinc-500 italic border border-dashed border-zinc-800 rounded-xl m-2">The whole team is in today!</div>';
+            } else {
+                const awayUsers = Array.from(new Set(awayToday.map(r => r.user_id)))
+                    .map(id => MOCK_DB.users.find(u => u.id === id))
+                    .filter(Boolean);
+
+                whosAwayContainer.innerHTML = awayUsers.map(u => `
+                    <div class="flex items-center gap-3 p-3 border-b border-zinc-800/60 last:border-0 hover:bg-zinc-800/40 transition rounded-xl">
+                        <div class="w-10 h-10 rounded-full bg-zinc-800 text-yellow-400 border border-zinc-700 flex items-center justify-center text-xs font-bold">${getInitials(u.name)}</div>
+                        <div class="flex-1">
+                            <div class="text-sm font-bold text-white">${esc(u.name)}</div>
+                            <div class="text-xs text-zinc-400">${u.role === 'manager' ? 'Manager' : 'Team Member'}</div>
+                        </div>
+                        <span class="w-2.5 h-2.5 rounded-full bg-yellow-400 ring-4 ring-yellow-400/20"></span>
+                    </div>
+                `).join('');
+            }
+
+            const upcomingHolidays = MOCK_DB.settings.holidays
+                .filter(h => h.date >= today)
+                .sort((a,b) => new Date(a.date) - new Date(b.date))
+                .slice(0, 4);
+
+            const holidayContainer = document.getElementById('dashboard-holidays');
+            if (upcomingHolidays.length === 0) {
+                 holidayContainer.innerHTML = '<div class="text-center text-xs text-zinc-500 italic">No upcoming holidays scheduled.</div>';
+            } else {
+                 holidayContainer.innerHTML = upcomingHolidays.map(h => {
+                     const d = new Date(h.date + 'T00:00:00');
+                     const month = d.toLocaleDateString('en-US', { month: 'short' });
+                     const day = d.getDate();
+                     return `
+                     <div class="flex items-center gap-4">
+                         <div class="flex flex-col items-center justify-center w-12 h-12 rounded-xl bg-zinc-950 text-yellow-400 border border-zinc-800 shrink-0">
+                             <span class="text-[9px] font-bold uppercase tracking-wider leading-none mb-0.5 text-zinc-400">${month}</span>
+                             <span class="text-lg font-black leading-none">${day}</span>
+                         </div>
+                         <div>
+                             <div class="text-sm font-bold text-white">${esc(h.name)}</div>
+                             <div class="text-xs text-zinc-400">${d.toLocaleDateString('en-US', { weekday: 'long' })}</div>
+                         </div>
+                     </div>
+                     `;
+                 }).join('');
+            }
+
+            const upcomingEvents = (MOCK_DB.settings.events || [])
+                .filter(e => e.date >= today)
+                .sort((a,b) => new Date(a.date) - new Date(b.date))
+                .slice(0, 4);
+
+            const eventsContainer = document.getElementById('dashboard-events');
+            if (upcomingEvents.length === 0) {
+                 eventsContainer.innerHTML = '<div class="text-center text-xs text-zinc-500 italic">No upcoming events scheduled.</div>';
+            } else {
+                 eventsContainer.innerHTML = upcomingEvents.map(e => {
+                     const d = new Date(e.date + 'T00:00:00');
+                     const month = d.toLocaleDateString('en-US', { month: 'short' });
+                     const day = d.getDate();
+                     return `
+                     <div class="flex items-center gap-4">
+                         <div class="flex flex-col items-center justify-center w-12 h-12 rounded-xl bg-zinc-950 text-amber-400 border border-zinc-800 shrink-0">
+                             <span class="text-[9px] font-bold uppercase tracking-wider leading-none mb-0.5 text-zinc-400">${month}</span>
+                             <span class="text-lg font-black leading-none">${day}</span>
+                         </div>
+                         <div>
+                             <div class="text-sm font-bold text-white">${esc(e.title)}</div>
+                             <div class="text-xs text-zinc-400">${d.toLocaleDateString('en-US', { weekday: 'long' })}</div>
+                         </div>
+                     </div>
+                     `;
+                 }).join('');
+            }
+        }
+
+        function renderHistory() {
+            const myReqs = MOCK_DB.requests.filter(r => r.user_id === currentUser.id).sort((a,b) => new Date(b.created) - new Date(a.created));
+            const tbody = document.getElementById('history-table-body');
+            
+            if(myReqs.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="py-10 text-zinc-500 text-center italic">You have not requested any leave yet.</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = myReqs.map(r => {
+                const isHourly = r.type === 'timeoff';
+                const duration = isHourly ? `${r.duration} Hours` : `${r.duration} Days`;
+                const dateRange = isHourly ? formatDate(r.start) : `${formatDate(r.start)} - ${formatDate(r.end)}`;
+                const actionBtn = r.status === 'Pending' 
+                    ? `<button onclick="cancelRequest('${r.id}')" class="text-rose-400 hover:text-rose-300 font-bold text-xs px-3 py-1.5 rounded-lg border border-rose-500/20 hover:bg-rose-500/10 transition"><i class="fa-solid fa-xmark mr-1"></i> Withdraw</button>` 
+                    : '<span class="text-zinc-600 text-xs">-</span>';
+
+                return `
+                    <tr class="hover:bg-zinc-800/40 transition">
+                        <td class="px-6 py-4">
+                            <div class="font-bold text-white">${LEAVE_TYPES[r.type]}</div>
+                            <div class="text-[10px] text-zinc-500 uppercase tracking-wider mt-0.5">Applied: ${formatDate(r.created)}</div>
+                        </td>
+                        <td class="px-6 py-4 text-zinc-300">${dateRange}</td>
+                        <td class="px-6 py-4 font-semibold text-zinc-200">${duration}</td>
+                        <td class="px-6 py-4">${getStatusBadge(r.status)}</td>
+                        <td class="px-6 py-4 text-right">${actionBtn}</td>
+                    </tr>`;
+            }).join('');
+        }
+
+        function renderManagerDashboard() {
+            const allReqs = [...MOCK_DB.requests].sort((a,b) => new Date(b.created) - new Date(a.created));
+            
+            // Pending
+            const pending = allReqs.filter(r => r.status === 'Pending');
+            const countEl = document.getElementById('mgr-pending-count');
+            if(countEl) countEl.textContent = pending.length;
+            
+            const list = document.getElementById('manager-approvals-list');
+            if(pending.length === 0) {
+                list.innerHTML = '<div class="text-zinc-500 text-xs text-center py-10 bg-zinc-900 rounded-2xl border border-zinc-800 border-dashed">All caught up! No pending requests.</div>';
+            } else {
+                list.innerHTML = pending.map(r => {
+                    const u = MOCK_DB.users.find(usr => usr.id === r.user_id);
+                    if(!u) return '';
+                    const isHourly = r.type === 'timeoff';
+                    const durationStr = isHourly ? `${r.duration} hours` : `${r.duration} days`;
+                    const dateStr = isHourly ? formatDate(r.start) : `${formatDate(r.start)} to ${formatDate(r.end)}`;
+                    const safeData = JSON.stringify(r).replace(/'/g, "&#39;").replace(/"/g, "&quot;");
+                    
+                    return `
+                    <div class="border border-zinc-800 rounded-2xl p-5 bg-zinc-900 shadow-xl flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+                        <div class="flex-1">
+                            <div class="flex items-center gap-3 mb-2">
+                                <div class="w-9 h-9 rounded-full bg-zinc-800 flex items-center justify-center text-xs font-bold text-yellow-400 border border-zinc-700">${getInitials(u.name)}</div>
+                                <span class="font-bold text-white text-lg">${esc(u.name)}</span>
+                                <span class="text-[10px] font-bold text-yellow-400 bg-yellow-400/10 px-2.5 py-1 rounded-md border border-yellow-400/20 uppercase tracking-wider">${LEAVE_TYPES[r.type]}</span>
+                            </div>
+                            <div class="text-sm text-zinc-300 mb-1 ml-12"><i class="fa-regular fa-calendar-days w-5 text-zinc-500"></i> ${dateStr} &bull; <strong class="text-white">${durationStr}</strong></div>
+                            <div class="text-xs text-zinc-400 ml-12 bg-zinc-950 p-2.5 rounded-xl border border-zinc-800 mt-2 inline-block"><strong class="text-zinc-300">Note:</strong> ${esc(r.reason)}</div>
+                        </div>
+                        <div class="w-full sm:w-auto ml-12 sm:ml-0">
+                            <button onclick="openReviewModal('${r.id}')" class="w-full sm:w-auto px-5 py-2.5 bg-yellow-400 text-zinc-950 font-bold rounded-xl hover:bg-yellow-300 transition whitespace-nowrap shadow-md">
+                                Review Request
+                            </button>
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+
+            // Calendar
+            const today = new Date().toISOString().split('T')[0];
+            const upcoming = allReqs.filter(r => r.status === 'Approved' && (r.end >= today || r.start >= today));
+            const cal = document.getElementById('manager-calendar-list');
+            
+            if(upcoming.length === 0) {
+                cal.innerHTML = '<div class="text-zinc-500 text-xs py-8 text-center italic">No upcoming approved leave.</div>';
+            } else {
+                cal.innerHTML = upcoming.map(r => {
+                    const u = MOCK_DB.users.find(usr => usr.id === r.user_id);
+                    const isHourly = r.type === 'timeoff';
+                    return `
+                    <div class="flex items-center gap-3 p-3 border-b border-zinc-800/60 last:border-0 hover:bg-zinc-800/40 transition">
+                        <div class="w-9 h-9 rounded-full bg-zinc-800 text-yellow-400 flex items-center justify-center text-xs font-bold border border-zinc-700">${getInitials(u.name)}</div>
+                        <div class="flex-1 overflow-hidden">
+                            <div class="text-sm font-bold text-white truncate">${esc(u.name)}</div>
+                            <div class="text-xs font-semibold text-yellow-400 mt-0.5">${formatDate(r.start)} ${!isHourly ? ' - ' + formatDate(r.end) : ''}</div>
+                        </div>
+                        <div class="text-[10px] font-bold text-zinc-400 border border-zinc-800 px-2 py-1 rounded bg-zinc-950 uppercase tracking-wider text-right w-20 leading-tight">
+                            ${LEAVE_TYPES[r.type]}
+                        </div>
+                    </div>`;
+                }).join('');
+            }
+        }
+
+        function openReviewModal(id) {
+            const reqData = MOCK_DB.requests.find(r => r.id === id);
+            if (!reqData) return;
+            selectedRequestForReview = reqData;
+            const u = MOCK_DB.users.find(usr => usr.id === reqData.user_id);
+            const currentBal = u.balances[reqData.type];
+            const unit = reqData.type === 'timeoff' ? 'hours' : 'days';
+
+            document.getElementById('mgr-modal-title').textContent = `Review: ${esc(u.name)}`;
+            
+            let statusHtml = `
+                <div class="flex justify-between items-center py-2 border-b border-zinc-800">
+                    <span class="font-semibold text-zinc-400 text-xs uppercase tracking-wider">Requested Amount:</span>
+                    <span class="font-bold text-white bg-zinc-900 px-2.5 py-1 rounded-lg border border-zinc-800">${reqData.duration} ${unit}</span>
+                </div>
+                <div class="flex justify-between items-center py-2">
+                    <span class="font-semibold text-zinc-400 text-xs uppercase tracking-wider">Current Balance:</span>
+                    <span class="font-bold text-yellow-400 bg-yellow-400/10 px-2.5 py-1 rounded-lg border border-yellow-400/20">${currentBal} ${unit}</span>
+                </div>
+            `;
+            
+            if (reqData.duration > currentBal) {
+                statusHtml += `<div class="mt-3 text-xs bg-rose-500/10 text-rose-400 p-2.5 rounded-xl border border-rose-500/20"><i class="fa-solid fa-triangle-exclamation mr-1"></i> Warning: Request exceeds available balance.</div>`;
+            }
+
+            document.getElementById('mgr-modal-desc').innerHTML = statusHtml;
+            document.getElementById('btn-approve').onclick = () => processRequest('Approved');
+            document.getElementById('btn-decline').onclick = () => processRequest('Declined');
+            openModal('modal-manager');
+        }
+
+        async function processRequest(status) {
+            const id = selectedRequestForReview.id;
+            closeModal('modal-manager');
+            const ok = await guarded('Saving decision...', async () => {
+                const { error } = await sb.rpc('decide_request', { p_id: id, p_status: status });
+                if (error) throw error;
+                await loadAll();
+            });
+            if (ok) showToast(`Request ${status}.`, 'success');
+            renderManagerDashboard();
+            renderOOOBanner();
+        }
+
+        function renderDevDashboard() {
+            const tbody = document.getElementById('admin-users-table');
+            const badge = document.getElementById('user-count-badge');
+            
+            badge.textContent = `${MOCK_DB.users.length} / ${MOCK_DB.settings.maxUsers} Users`;
+            if (MOCK_DB.users.length >= MOCK_DB.settings.maxUsers) {
+                badge.className = 'bg-rose-500/10 text-rose-400 border border-rose-500/20 font-bold px-3 py-1 rounded-full text-xs';
+            } else {
+                badge.className = 'bg-zinc-800 text-zinc-300 border border-zinc-700 font-bold px-3 py-1 rounded-full text-xs';
+            }
+
+            document.getElementById('adj-user').innerHTML = MOCK_DB.users.map(u => `<option value="${u.id}">${esc(u.name)} (${esc(u.email)})</option>`).join('');
+
+            tbody.innerHTML = MOCK_DB.users.map(u => {
+                const statusBadge = u.status === 'active' 
+                    ? '<span class="text-emerald-400 bg-emerald-400/10 border border-emerald-400/20 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider"><i class="fa-solid fa-check mr-1"></i> Active</span>' 
+                    : '<span class="text-rose-400 bg-rose-400/10 border border-rose-400/20 px-2.5 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider"><i class="fa-solid fa-ban mr-1"></i> Inactive</span>';
+                    
+                const roleColors = { 
+                    'developer': 'bg-yellow-400/10 text-yellow-400 border-yellow-400/20', 
+                    'manager': 'bg-amber-400/10 text-amber-400 border-amber-400/20', 
+                    'user': 'bg-zinc-800 text-zinc-300 border-zinc-700' 
+                };
+                
+                return `
+                <tr class="hover:bg-zinc-800/40 transition border-b border-zinc-800/60 last:border-0">
+                    <td class="px-6 py-4">
+                        <div class="font-bold text-white">${esc(u.name)}</div>
+                        <div class="text-xs text-zinc-400 mt-0.5">${esc(u.email)}</div>
+                    </td>
+                    <td class="px-6 py-4"><span class="capitalize text-[10px] font-bold px-2.5 py-1 rounded-md border ${roleColors[u.role]} uppercase tracking-wider">${u.role}</span></td>
+                    <td class="px-6 py-4">${statusBadge}</td>
+                    <td class="px-6 py-4 text-xs text-zinc-400">${formatDate(u.joined)}</td>
+                </tr>`;
+            }).join('');
+        }
+
+        /**
+         * 6. EVENT LISTENERS: DEV FORMS & ACTIONS
+         */
+        function showCredentialsDialog(email, password) {
+            const wrap = document.createElement('div');
+            wrap.className = 'fixed inset-0 z-[120] flex items-center justify-center bg-zinc-950/80 backdrop-blur-md p-4';
+            wrap.innerHTML = `
+                <div class="bg-zinc-900 border border-zinc-800 rounded-3xl p-6 w-full max-w-md shadow-2xl">
+                    <h3 class="text-lg font-extrabold text-white mb-1">User created</h3>
+                    <p class="text-sm text-zinc-400 mb-4">Share these sign-in details with <strong class="text-white">${esc(email)}</strong>. The password is shown only once.</p>
+                    <label class="block text-xs font-bold uppercase tracking-wider text-zinc-400 mb-2">Temporary password</label>
+                    <input readonly value="${esc(password)}" class="w-full px-4 py-3 border border-zinc-800 rounded-xl bg-zinc-950 text-yellow-400 font-mono mb-4">
+                    <div class="flex gap-3">
+                        <button id="cred-copy" class="flex-1 px-4 py-2.5 bg-zinc-800 border border-zinc-700 text-zinc-200 rounded-xl font-bold">Copy</button>
+                        <button id="cred-close" class="flex-1 px-4 py-2.5 bg-yellow-400 text-zinc-950 rounded-xl font-bold">Done</button>
+                    </div>
+                </div>`;
+            document.body.appendChild(wrap);
+            wrap.querySelector('input').select();
+            wrap.querySelector('#cred-copy').onclick = () => { navigator.clipboard?.writeText(password); showToast('Copied to clipboard.', 'info'); };
+            wrap.querySelector('#cred-close').onclick = () => wrap.remove();
+        }
+
+        document.getElementById('create-user-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            if (MOCK_DB.users.length >= MOCK_DB.settings.maxUsers) {
+                showToast(`Max capacity reached! Cannot add more than ${MOCK_DB.settings.maxUsers} users.`, 'error');
+                return;
+            }
+            const body = {
+                name: document.getElementById('new-user-name').value,
+                email: document.getElementById('new-user-email').value,
+                role: document.getElementById('new-user-role').value,
+                dob: document.getElementById('new-user-dob').value || null
+            };
+            let result = null;
+            const ok = await guarded('Creating user...', async () => {
+                const { data, error } = await sb.functions.invoke('create-user', { body });
+                if (error) {
+                    let msg = error.message;
+                    try { const j = await error.context.json(); if (j.error) msg = j.error; } catch (_) {}
+                    throw new Error(msg);
+                }
+                result = data;
+                await loadAll();
+            });
+            if (ok && result) {
+                document.getElementById('create-user-form').reset();
+                renderDevDashboard();
+                showCredentialsDialog(result.email, result.tempPassword);
+            }
+        });
+
+        document.getElementById('create-event-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const title = document.getElementById('new-event-title').value;
+            const date = document.getElementById('new-event-date').value;
+            const ok = await guarded('Scheduling event...', async () => {
+                const { error } = await sb.from('events').insert({ title, date });
+                if (error) throw error;
+                await loadAll();
+            });
+            if (ok) {
+                showToast(`Event "${esc(title)}" scheduled successfully.`, 'success');
+                document.getElementById('create-event-form').reset();
+                renderDevDashboard();
+            }
+        });
+
+        document.getElementById('adjust-balance-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const userId = document.getElementById('adj-user').value;
+            const type = document.getElementById('adj-type').value;
+            const amount = parseFloat(document.getElementById('adj-amount').value);
+            let newBal = null;
+            const ok = await guarded('Adjusting balance...', async () => {
+                const { data, error } = await sb.rpc('adjust_balance', { p_user: userId, p_type: type, p_amount: amount });
+                if (error) throw error;
+                newBal = data;
+                await loadAll();
+            });
+            if (ok) {
+                const user = MOCK_DB.users.find(u => u.id === userId);
+                const unit = type === 'timeoff' ? 'hours' : 'days';
+                showToast(`Adjusted ${amount} ${unit} for ${esc(user ? user.name : 'user')}'s ${type} balance. (New Bal: ${newBal})`, 'success');
+                document.getElementById('adjust-balance-form').reset();
+                renderDevDashboard();
+            }
+        });
+
+        async function runMonthlyAccrual() {
+            let count = 0;
+            const ok = await guarded('Running accrual...', async () => {
+                const { data, error } = await sb.rpc('run_monthly_accrual');
+                if (error) throw error;
+                count = data;
+                await loadAll();
+            });
+            if (ok) { showToast(`System Job Complete: Accrued annual leave for ${count} active users.`, 'success'); renderDevDashboard(); }
+        }
+
+        /**
+         * 7. EVENT LISTENERS: LEAVE REQUEST
+         */
+        const typeSelect = document.getElementById('req-type');
+        const endGroup = document.getElementById('end-date-group');
+        const hoursGroup = document.getElementById('hours-group');
+
+        typeSelect.addEventListener('change', () => {
+            if (typeSelect.value === 'timeoff') {
+                endGroup.classList.add('hidden');
+                hoursGroup.classList.remove('hidden');
+                document.getElementById('req-end').required = false;
+            } else {
+                endGroup.classList.remove('hidden');
+                hoursGroup.classList.add('hidden');
+                document.getElementById('req-end').required = true;
+            }
+        });
+
+        document.getElementById('request-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const type = typeSelect.value;
+            const start = document.getElementById('req-start').value;
+            const reason = document.getElementById('req-reason').value;
+            const isDevSubmitting = currentUser.role === 'developer';
+            const targetUserId = isDevSubmitting ? document.getElementById('req-dev-user').value : null;
+            const isHourly = type === 'timeoff';
+            const end = isHourly ? null : document.getElementById('req-end').value;
+
+            if (!isHourly && new Date(start) > new Date(end)) {
+                showToast('End date cannot be prior to start date.', 'error');
+                return;
+            }
+
+            const ok = await guarded('Submitting request...', async () => {
+                const { error } = await sb.rpc('submit_leave_request', {
+                    p_type: type, p_start: start, p_end: end,
+                    p_hours: isHourly ? parseFloat(document.getElementById('req-hours').value) : null,
+                    p_reason: reason, p_user: targetUserId
+                });
+                if (error) throw error;
+                await loadAll();
+            });
+            if (!ok) return;
+
+            document.getElementById('request-form').reset();
+            if (isDevSubmitting) {
+                showToast('Leave automatically approved and logged.', 'success');
+                navigate('dashboard');
+            } else {
+                showToast('Leave request submitted successfully.', 'success');
+                typeSelect.value = 'annual';
+                typeSelect.dispatchEvent(new Event('change'));
+                navigate('history');
+            }
+        });
+
+        async function cancelRequest(id) {
+            const ok = await guarded('Withdrawing...', async () => {
+                const { error } = await sb.rpc('cancel_request', { p_id: id });
+                if (error) throw error;
+                await loadAll();
+            });
+            if (ok) { showToast('Request withdrawn successfully.', 'info'); renderHistory(); }
+        }
+    </script>
+</body>
+</html>

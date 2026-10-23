@@ -1,0 +1,15 @@
+directories:
+  output: dist
+  buildResources: build
+appId: com.leavetracker.pro
+productName: LeaveTracker Pro
+files:
+  - filter:
+      - main.js
+      - app/**/*
+win:
+  target: portable
+  signAndEditExecutable: false
+portable:
+  artifactName: LeaveTracker-Pro.exe
+electronVersion: 33.4.11
